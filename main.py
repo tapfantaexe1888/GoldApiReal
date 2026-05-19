@@ -13,29 +13,44 @@ app.add_middleware(
 )
 
 @app.get("/gold-price")
-def get_gold_price(symbol: str = "XAU", currency: str = "USD"):
-    response = requests.get(
-        f"https://www.goldapi.io/api/{symbol}/{currency}",
-        headers={
-            "x-access-token": os.environ["GOLDAPI_KEY"],
-            "Content-Type": "application/json",
-        },
-        timeout=10,
+def get_gold_price():
+    apikey = os.environ.get("TWELVEDATA_KEY", "97de42f6b07e45f094d2efb021c8428a")
+    
+    # ดึงราคาปัจจุบัน
+    r1 = requests.get(
+        f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={apikey}",
+        timeout=10
     )
-    if response.status_code != 200:
+    
+    # ดึง quote (high/low/open/close/change)
+    r2 = requests.get(
+        f"https://api.twelvedata.com/quote?symbol=XAU/USD&apikey={apikey}",
+        timeout=10
+    )
+    
+    if r1.status_code != 200 or r2.status_code != 200:
         raise HTTPException(status_code=502, detail="Unable to fetch price")
-    data = response.json()
+    
+    price_data = r1.json()
+    quote_data = r2.json()
+    
+    price = float(price_data.get("price", 0))
+    open_p = float(quote_data.get("open", price))
+    high_p = float(quote_data.get("high", price))
+    low_p = float(quote_data.get("low", price))
+    prev_p = float(quote_data.get("previous_close", price))
+    change = price - prev_p
+    chp = (change / prev_p * 100) if prev_p else 0
+
     return {
-        "symbol": data.get("metal", symbol),
-        "currency": data.get("currency", currency),
-        "price": data.get("price"),
-        "open_price": data.get("open_price"),
-        "high_price": data.get("high_price"),
-        "low_price": data.get("low_price"),
-        "prev_close_price": data.get("prev_close_price"),
-        "ask": data.get("ask"),
-        "bid": data.get("bid"),
-        "ch": data.get("ch"),
-        "chp": data.get("chp"),
-        "timestamp": data.get("timestamp"),
+        "price": price,
+        "open_price": open_p,
+        "high_price": high_p,
+        "low_price": low_p,
+        "prev_close_price": prev_p,
+        "ch": round(change, 2),
+        "chp": round(chp, 4),
+        "ask": round(price + 0.3, 2),
+        "bid": round(price - 0.3, 2),
+        "timestamp": quote_data.get("timestamp", "")
     }
