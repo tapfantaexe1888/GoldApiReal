@@ -8,40 +8,26 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["*"],
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
 @app.get("/gold-price")
 def get_gold_price():
     apikey = os.environ.get("TWELVEDATA_KEY", "97de42f6b07e45f094d2efb021c8428a")
-    
-    # ดึงราคาปัจจุบัน
-    r1 = requests.get(
-        f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={apikey}",
-        timeout=10
-    )
-    
-    # ดึง quote (high/low/open/close/change)
-    r2 = requests.get(
-        f"https://api.twelvedata.com/quote?symbol=XAU/USD&apikey={apikey}",
-        timeout=10
-    )
-    
+    r1 = requests.get(f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={apikey}", timeout=10)
+    r2 = requests.get(f"https://api.twelvedata.com/quote?symbol=XAU/USD&apikey={apikey}", timeout=10)
     if r1.status_code != 200 or r2.status_code != 200:
         raise HTTPException(status_code=502, detail="Unable to fetch price")
-    
-    price_data = r1.json()
-    quote_data = r2.json()
-    
-    price = float(price_data.get("price", 0))
-    open_p = float(quote_data.get("open", price))
-    high_p = float(quote_data.get("high", price))
-    low_p = float(quote_data.get("low", price))
-    prev_p = float(quote_data.get("previous_close", price))
+    p = r1.json()
+    q = r2.json()
+    price = float(p.get("price", 0))
+    open_p = float(q.get("open", price))
+    high_p = float(q.get("high", price))
+    low_p = float(q.get("low", price))
+    prev_p = float(q.get("previous_close", price))
     change = price - prev_p
     chp = (change / prev_p * 100) if prev_p else 0
-
     return {
         "price": price,
         "open_price": open_p,
@@ -52,5 +38,9 @@ def get_gold_price():
         "chp": round(chp, 4),
         "ask": round(price + 0.3, 2),
         "bid": round(price - 0.3, 2),
-        "timestamp": quote_data.get("timestamp", "")
+        "timestamp": q.get("timestamp", "")
     }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
